@@ -163,18 +163,6 @@ void loop() {
                // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
                if (digitalRead(outputB) != aState) { 
                  counter ++;
-
-                  //write data
-                  Serial.print("ypr\t");
-                  Serial.print(ypr[0] * 180/M_PI);
-                  Serial.print("\t");
-                  Serial.print(ypr[1] * 180/M_PI);
-                  Serial.print("\t");
-                  Serial.println(ypr[2] * 180/M_PI);
-                  dataString = String(i) + "," + String(ypr[0]) + "," + String(ypr[1]) + "," + String(ypr[2]); // convert to CSV
-                  i++;//menandakan data ke-i
-                  saveData(); // save to SD card
-                 
                } else {
                  counter --;
                }
@@ -182,6 +170,17 @@ void loop() {
                Serial.print("Jarak : ");
                Serial.print(jarak, 4);//4 digit belakang koma
                Serial.println(" cm");
+
+                //write data
+                Serial.print("ypr\t");
+                Serial.print(ypr[0] * 180/M_PI);
+                Serial.print("\t");
+                Serial.print(ypr[1] * 180/M_PI);
+                Serial.print("\t");
+                Serial.println(ypr[2] * 180/M_PI);
+                dataString = String(counter) + "," + String(ypr[0]) + "," + String(ypr[1]) + "," + String(ypr[2]); // convert to CSV
+                saveData(); // save to SD card
+               
              } 
              aLastState = aState; // Updates the previous state of the outputA with the current state
         }
@@ -243,7 +242,7 @@ void saveData(){
             sensorData.close(); // close the file
             Serial.println("Data hass been printed");
             Serial.print("Data ke- ");
-            Serial.println(i);
+            Serial.println(counter);
         }
     } else{
     Serial.println("Error writing to file !");
