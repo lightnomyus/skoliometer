@@ -19,9 +19,8 @@ MPU6050 mpu;
 #define OUTPUT_READABLE_YAWPITCHROLL
 #define INTERRUPT_PIN 2  // use pin 2 on Arduino Uno & most boards
 #define pushButt 3 // Push Button buat start dan finish measurement
-bool blinkState = false;
 
-//ROtary Encoder
+//Rotary Encoder
 #define outputA 6 //Dt
 #define outputB 7 //CLK
 float const d = 3.1;//satuan dlm cm
@@ -30,6 +29,7 @@ int counter = 0;
 int putaran = 0; 
 int aState;
 int aLastState; 
+int isReadingData = 0;
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -85,6 +85,7 @@ void setup() {
     while(digitalRead(pushButt) == LOW);
     while(digitalRead(pushButt) != LOW);
     while(digitalRead(pushButt) == LOW);
+    isReadingData = 1;
 
     // load and configure the DMP
     Serial.println(F("Initializing DMP..."));
@@ -134,69 +135,76 @@ void loop() {
     // if programming failed, don't try to do anything
     if (!dmpReady) return;
 
-    // wait for MPU interrupt or extra packet(s) available
-    while (!mpuInterrupt && fifoCount < packetSize) {
-        if (mpuInterrupt && fifoCount < packetSize) {
-          // try to get out of the infinite loop 
-          fifoCount = mpu.getFIFOCount();
-        }  
-        // other program behavior stuff here
-    }
-
-    // reset interrupt flag and get INT_STATUS byte
-    mpuInterrupt = false;
-    mpuIntStatus = mpu.getIntStatus();
-
-    // get current FIFO count
-    fifoCount = mpu.getFIFOCount();
-
-    // check for overflow (this should never happen unless our code is too inefficient)
-    if ((mpuIntStatus & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount >= 1024) {
-        // reset so we can continue cleanly
-        mpu.resetFIFO();
+    while( isReadingData ==1 ){
+        // wait for MPU interrupt or extra packet(s) available
+        while (!mpuInterrupt && fifoCount < packetSize) {
+            if (mpuInterrupt && fifoCount < packetSize) {
+              // try to get out of the infinite loop 
+              fifoCount = mpu.getFIFOCount();
+            }  
+            
+            // rotary encoder is processed here
+             aState = digitalRead(outputA); // Reads the "current" state of the outputA
+             // If the previous and the current state of the outputA are different, that means a Pulse has occured
+             if (aState != aLastState){     
+               // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
+               if (digitalRead(outputB) != aState) { 
+                 counter ++;
+               } else {
+                 counter --;
+               }
+               jarak = counter*0.1*3.1416*d;
+               Serial.print("Jarak : ");
+               Serial.print(jarak, 4);//4 digit belakang koma
+               Serial.println(" cm");
+             } 
+             aLastState = aState; // Updates the previous state of the outputA with the current state
+        }
+        // reset interrupt flag and get INT_STATUS byte
+        mpuInterrupt = false;
+        mpuIntStatus = mpu.getIntStatus();
+    
+        // get current FIFO count
         fifoCount = mpu.getFIFOCount();
-        Serial.println(F("FIFO overflow!"));
-
-    // otherwise, check for DMP data ready interrupt (this should happen frequently)
-    } else if (mpuIntStatus & _BV(MPU6050_INTERRUPT_DMP_INT_BIT)) {
-        // wait for correct available data length, should be a VERY short wait
-        while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
-
-        // read a packet from FIFO
-        mpu.getFIFOBytes(fifoBuffer, packetSize);
-        
-        // track FIFO count here in case there is > 1 packet available
-        // (this lets us immediately read more without waiting for an interrupt)
-        fifoCount -= packetSize;
-
-        #ifdef OUTPUT_READABLE_YAWPITCHROLL
-            // display Euler angles in degrees
-            mpu.dmpGetQuaternion(&q, fifoBuffer);
-            mpu.dmpGetGravity(&gravity, &q);
-            mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-            Serial.print("ypr\t");
-            Serial.print(ypr[0] * 180/M_PI);
-            Serial.print("\t");
-            Serial.print(ypr[1] * 180/M_PI);
-            Serial.print("\t");
-            Serial.println(ypr[2] * 180/M_PI);
-        #endif
+    
+        // check for overflow (this should never happen unless our code is too inefficient)
+        if ((mpuIntStatus & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount >= 1024) {
+            // reset so we can continue cleanly
+            mpu.resetFIFO();
+            fifoCount = mpu.getFIFOCount();
+            Serial.println(F("FIFO overflow!"));
+    
+        // otherwise, check for DMP data ready interrupt (this should happen frequently)
+        } else if (mpuIntStatus & _BV(MPU6050_INTERRUPT_DMP_INT_BIT)) {
+            // wait for correct available data length, should be a VERY short wait
+            while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
+    
+            // read a packet from FIFO
+            mpu.getFIFOBytes(fifoBuffer, packetSize);
+            
+            // track FIFO count here in case there is > 1 packet available
+            // (this lets us immediately read more without waiting for an interrupt)
+            fifoCount -= packetSize;
+    
+            #ifdef OUTPUT_READABLE_YAWPITCHROLL
+                // display Euler angles in degrees
+                mpu.dmpGetQuaternion(&q, fifoBuffer);
+                mpu.dmpGetGravity(&gravity, &q);
+                mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+                Serial.print("ypr\t");
+                Serial.print(ypr[0] * 180/M_PI);
+                Serial.print("\t");
+                Serial.print(ypr[1] * 180/M_PI);
+                Serial.print("\t");
+                Serial.println(ypr[2] * 180/M_PI);
+            #endif
+        }
+        //stop reading from sensor
+        if(digitalRead(pushButt)==LOW){
+            isReadingData=0;
+            Serial.println("isReadingData = 0");
+            delay(300);
+        } 
     }
-
-   aState = digitalRead(outputA); // Reads the "current" state of the outputA
-   // If the previous and the current state of the outputA are different, that means a Pulse has occured
-   if (aState != aLastState){     
-     // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
-     if (digitalRead(outputB) != aState) { 
-       counter ++;
-     } else {
-       counter --;
-     }
-     jarak = counter*0.1*3.1416*d;
-     Serial.print("Jarak : ");
-     Serial.print(jarak, 4);//4 digit belakang koma
-     Serial.println( )
-   } 
-   aLastState = aState; // Updates the previous state of the outputA with the current state
 
 }
