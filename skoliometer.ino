@@ -21,6 +21,16 @@ MPU6050 mpu;
 #define pushButt 3 // Push Button buat start dan finish measurement
 bool blinkState = false;
 
+//ROtary Encoder
+#define outputA 6 //Dt
+#define outputB 7 //CLK
+float const d = 3.1;//satuan dlm cm
+float jarak;
+int counter = 0;
+int putaran = 0; 
+int aState;
+int aLastState; 
+
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
 uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
@@ -59,8 +69,11 @@ void setup() {
     // initialize device
     Serial.println(F("Initializing I2C devices..."));
     mpu.initialize();
+    
     pinMode(INTERRUPT_PIN, INPUT);
-
+    pinMode (outputA,INPUT);
+    pinMode (outputB,INPUT);
+   
     // verify connection
     Serial.println(F("Testing device connections..."));
     Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
@@ -111,6 +124,9 @@ void setup() {
         Serial.print(devStatus);
         Serial.println(F(")"));
     }
+
+    // Reads the initial state of the outputA
+    aLastState = digitalRead(outputA);
 
 }
 
@@ -166,4 +182,21 @@ void loop() {
             Serial.println(ypr[2] * 180/M_PI);
         #endif
     }
+
+   aState = digitalRead(outputA); // Reads the "current" state of the outputA
+   // If the previous and the current state of the outputA are different, that means a Pulse has occured
+   if (aState != aLastState){     
+     // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
+     if (digitalRead(outputB) != aState) { 
+       counter ++;
+     } else {
+       counter --;
+     }
+     jarak = counter*0.1*3.1416*d;
+     Serial.print("Jarak : ");
+     Serial.print(jarak, 4);//4 digit belakang koma
+     Serial.println( )
+   } 
+   aLastState = aState; // Updates the previous state of the outputA with the current state
+
 }
