@@ -22,12 +22,15 @@ int putaran = 0;
 int aState;
 int aLastState; 
 int isReadingData = 0;
+int i = 0;
 
 //SD Card
 #include "SD.h"
 #include"SPI.h"
 const int CSpin = 10;
 String dataString =""; // holds the data to be written to the SD card
+
+File sensorData;
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -77,6 +80,18 @@ void setup() {
     Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
 
     pinMode(pushButt, INPUT_PULLUP);
+
+    //begin SD Card
+    Serial.print("Initializing SD card...");
+    pinMode(CSpin, OUTPUT);
+    
+    // see if the card is present and can be initialized:
+    if (!SD.begin(CSpin)) {
+        Serial.println("Card failed, or not present");
+        // don't do anything more:
+        return;
+    }
+    Serial.println("card initialized.");
     
     // wait for ready
     Serial.println(F("\nPress Push Button to Start: "));
@@ -156,6 +171,9 @@ void loop() {
                   Serial.print(ypr[1] * 180/M_PI);
                   Serial.print("\t");
                   Serial.println(ypr[2] * 180/M_PI);
+                  dataString = String(i) + "," + String(ypr[0]) + "," + String(ypr[1]) + "," + String(ypr[2]); // convert to CSV
+                  i++;//menandakan data ke-i
+                  saveData(); // save to SD card
                  
                } else {
                  counter --;
@@ -214,4 +232,20 @@ void loop() {
         } 
     }
 
+}
+
+void saveData(){
+    if(SD.exists("data.csv")){ // check the card is still there
+        // now append new data file
+        sensorData = SD.open("data.csv", FILE_WRITE);
+        if (sensorData){
+            sensorData.println(dataString);
+            sensorData.close(); // close the file
+            Serial.println("Data hass been printed");
+            Serial.print("Data ke- ");
+            Serial.println(i);
+        }
+    } else{
+    Serial.println("Error writing to file !");
+    }
 }
