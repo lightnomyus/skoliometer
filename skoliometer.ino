@@ -1,19 +1,11 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 //#include "MPU6050.h" // not necessary if using MotionApps include file
-
-// Arduino Wire library is required if I2Cdev I2CDEV_ARDUINO_WIRE implementation
-// is used in I2Cdev.h
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
     #include "Wire.h"
 #endif
 
-// class default I2C address is 0x68
-// specific I2C addresses may be passed as a parameter here
-// AD0 low = 0x68 (default for SparkFun breakout and InvenSense evaluation board)
-// AD0 high = 0x69
 MPU6050 mpu;
-//MPU6050 mpu(0x69); // <-- use for AD0 high
 /*koneksi: pake 3.3Volt, GND, SDA(A4)-SCL(A5), sama INT ke pin interrupt (di UNO = pin no.2)*/
 
 #define OUTPUT_READABLE_YAWPITCHROLL
@@ -30,6 +22,12 @@ int putaran = 0;
 int aState;
 int aLastState; 
 int isReadingData = 0;
+
+//SD Card
+#include "SD.h"
+#include"SPI.h"
+const int CSpin = 10;
+String dataString =""; // holds the data to be written to the SD card
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -150,6 +148,15 @@ void loop() {
                // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
                if (digitalRead(outputB) != aState) { 
                  counter ++;
+
+                  //write data
+                  Serial.print("ypr\t");
+                  Serial.print(ypr[0] * 180/M_PI);
+                  Serial.print("\t");
+                  Serial.print(ypr[1] * 180/M_PI);
+                  Serial.print("\t");
+                  Serial.println(ypr[2] * 180/M_PI);
+                 
                } else {
                  counter --;
                }
@@ -191,12 +198,12 @@ void loop() {
                 mpu.dmpGetQuaternion(&q, fifoBuffer);
                 mpu.dmpGetGravity(&gravity, &q);
                 mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-                Serial.print("ypr\t");
-                Serial.print(ypr[0] * 180/M_PI);
-                Serial.print("\t");
-                Serial.print(ypr[1] * 180/M_PI);
-                Serial.print("\t");
-                Serial.println(ypr[2] * 180/M_PI);
+//                Serial.print("ypr\t");
+//                Serial.print(ypr[0] * 180/M_PI);
+//                Serial.print("\t");
+//                Serial.print(ypr[1] * 180/M_PI);
+//                Serial.print("\t");
+//                Serial.println(ypr[2] * 180/M_PI);
             #endif
         }
         //stop reading from sensor
