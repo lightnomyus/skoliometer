@@ -22,12 +22,15 @@ int putaran = 0;
 int aState;
 int aLastState; 
 int isReadingData = 0;
+int i = 0;
 
 //SD Card
 #include "SD.h"
 #include"SPI.h"
 const int CSpin = 10;
 String dataString =""; // holds the data to be written to the SD card
+
+File sensorData;
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -45,6 +48,7 @@ VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measure
 VectorFloat gravity;    // [x, y, z]            gravity vector
 float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+float yawn, pitch, roll;
 
 //ISR detection here
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
@@ -77,6 +81,18 @@ void setup() {
     Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
 
     pinMode(pushButt, INPUT_PULLUP);
+
+    //begin SD Card
+    Serial.print("Initializing SD card...");
+    pinMode(CSpin, OUTPUT);
+    
+    // see if the card is present and can be initialized:
+    if (!SD.begin(CSpin)) {
+        Serial.println("Card failed, or not present");
+        // don't do anything more:
+        return;
+    }
+    Serial.println("card initialized.");
     
     // wait for ready
     Serial.println(F("\nPress Push Button to Start: "));
@@ -127,6 +143,8 @@ void setup() {
     // Reads the initial state of the outputA
     aLastState = digitalRead(outputA);
 
+    //Open File for SD Card
+    sensorData = SD.open("data.csv", FILE_WRITE);
 }
 
 void loop() {
@@ -148,15 +166,6 @@ void loop() {
                // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
                if (digitalRead(outputB) != aState) { 
                  counter ++;
-
-                  //write data
-                  Serial.print("ypr\t");
-                  Serial.print(ypr[0] * 180/M_PI);
-                  Serial.print("\t");
-                  Serial.print(ypr[1] * 180/M_PI);
-                  Serial.print("\t");
-                  Serial.println(ypr[2] * 180/M_PI);
-                 
                } else {
                  counter --;
                }
@@ -164,6 +173,26 @@ void loop() {
                Serial.print("Jarak : ");
                Serial.print(jarak, 4);//4 digit belakang koma
                Serial.println(" cm");
+
+               yawn = ypr[0] * 180/M_PI;
+               pitch = ypr[1] * 180/M_PI;
+               roll = ypr[0] * 180/M_PI;
+  
+                //write data
+                Serial.print("ypr\t");
+                Serial.print(yawn);
+                //Serial.print(ypr[0] * 180/M_PI);
+                Serial.print("\t");
+                Serial.print(pitch);
+                //Serial.print(ypr[1] * 180/M_PI);
+                Serial.print("\t");
+                Serial.println(roll);
+                //Serial.println(ypr[2] * 180/M_PI);
+
+                //write data to SD Card
+                dataString = String(jarak) + "," + String(yawn) + "," + String(pitch) + "," + String(roll); // convert to CSV
+                sensorData.println(dataString);
+                //saveData(); // save to SD card
              } 
              aLastState = aState; // Updates the previous state of the outputA with the current state
         }
@@ -210,8 +239,24 @@ void loop() {
         if(digitalRead(pushButt)==LOW){
             isReadingData=0;
             Serial.println("isReadingData = 0");
+            sensorData.close(); // close the file
             delay(300);
-        } 
+        }
     }
 
+}
+
+void saveData(){
+    if(SD.exists("data.csv")){ // check the card is still there
+        // now append new data file
+        sensorData = SD.open("data.csv", FILE_WRITE);
+        Serial.println("Writing Data");
+        if (sensorData){
+            sensorData.println(dataString);
+            sensorData.close(); // close the file
+            Serial.println("Data hass been printed");
+        }
+    } else{
+    Serial.println("Error writing to file !");
+    }
 }
