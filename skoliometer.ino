@@ -48,6 +48,7 @@ VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measure
 VectorFloat gravity;    // [x, y, z]            gravity vector
 float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+float yawn, pitch, roll;
 
 //ISR detection here
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
@@ -142,6 +143,8 @@ void setup() {
     // Reads the initial state of the outputA
     aLastState = digitalRead(outputA);
 
+    //Open File for SD Card
+    sensorData = SD.open("data.csv", FILE_WRITE);
 }
 
 void loop() {
@@ -171,16 +174,25 @@ void loop() {
                Serial.print(jarak, 4);//4 digit belakang koma
                Serial.println(" cm");
 
+               yawn = ypr[0] * 180/M_PI;
+               pitch = ypr[1] * 180/M_PI;
+               roll = ypr[0] * 180/M_PI;
+  
                 //write data
                 Serial.print("ypr\t");
-                Serial.print(ypr[0] * 180/M_PI);
+                Serial.print(yawn);
+                //Serial.print(ypr[0] * 180/M_PI);
                 Serial.print("\t");
-                Serial.print(ypr[1] * 180/M_PI);
+                Serial.print(pitch);
+                //Serial.print(ypr[1] * 180/M_PI);
                 Serial.print("\t");
-                Serial.println(ypr[2] * 180/M_PI);
-                dataString = String(counter) + "," + String(ypr[0]) + "," + String(ypr[1]) + "," + String(ypr[2]); // convert to CSV
-                saveData(); // save to SD card
-               
+                Serial.println(roll);
+                //Serial.println(ypr[2] * 180/M_PI);
+
+                //write data to SD Card
+                dataString = String(jarak) + "," + String(yawn) + "," + String(pitch) + "," + String(roll); // convert to CSV
+                sensorData.println(dataString);
+                //saveData(); // save to SD card
              } 
              aLastState = aState; // Updates the previous state of the outputA with the current state
         }
@@ -227,8 +239,9 @@ void loop() {
         if(digitalRead(pushButt)==LOW){
             isReadingData=0;
             Serial.println("isReadingData = 0");
+            sensorData.close(); // close the file
             delay(300);
-        } 
+        }
     }
 
 }
@@ -237,12 +250,11 @@ void saveData(){
     if(SD.exists("data.csv")){ // check the card is still there
         // now append new data file
         sensorData = SD.open("data.csv", FILE_WRITE);
+        Serial.println("Writing Data");
         if (sensorData){
             sensorData.println(dataString);
             sensorData.close(); // close the file
             Serial.println("Data hass been printed");
-            Serial.print("Data ke- ");
-            Serial.println(counter);
         }
     } else{
     Serial.println("Error writing to file !");
