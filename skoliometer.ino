@@ -43,9 +43,10 @@ uint8_t fifoBuffer[64]; // FIFO storage buffer
 // orientation/motion vars
 Quaternion q;           // [w, x, y, z]         quaternion container
 VectorFloat gravity;    // [x, y, z]            gravity vector
+float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
-float yawn, pitch, roll;
-float calibrateYawn, calibratePitch, calibrateRoll;
+float roll;
+float calibrateRoll;
 
 //ISR detection here
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
@@ -154,7 +155,7 @@ void loop() {
     if (!dmpReady) return;
     
     //isReadingData=1 when calibration, =2 when measurement
-    if( isReadingData ==1 || isReadingData==2 ){
+    while( isReadingData != 0 ){
         // wait for MPU interrupt or extra packet(s) available
         while (!mpuInterrupt && fifoCount < packetSize) {
             if (mpuInterrupt && fifoCount < packetSize) {
@@ -162,7 +163,7 @@ void loop() {
               fifoCount = mpu.getFIFOCount();
             }  
             
-            if( isReadingData==2 ){
+
                 // when measuring, rotary encoder is processed here
                 aState = digitalRead(outputA); // Reads the "current" state of the outputA
                 // If the previous and the current state of the outputA are different, that means a Pulse has occured
@@ -178,36 +179,34 @@ void loop() {
                     Serial.print(jarak, 4);//4 digit belakang koma
                     Serial.println(" cm");
 
-                    yawn = ypr[0] * 180/M_PI - calibrateYawn;
-                    pitch = ypr[1] * 180/M_PI - calibratePitch;
-                    roll = ypr[0] * 180/M_PI - calibrateRoll;
+                    roll = ypr[2] * 180/M_PI;
+                    //roll = ypr[2] * 180/M_PI - calibrateRoll;
         
                     //write data
                     Serial.print("ypr\t");
-                    Serial.print(yawn);
-                    Serial.print("\t");
-                    Serial.print(pitch);
-                    Serial.print("\t");
                     Serial.println(roll);
 
                     //write data to SD Card
-                    dataString = String(jarak) + "," + String(yawn) + "," + String(pitch) + "," + String(roll); // convert to CSV
+                    dataString = String(jarak) + "," + String(roll); // convert to CSV
                     sensorData.println(dataString);
 
                     //measure TI and LI
                     if( jarak >0 && jarak<25 ){
-                        if( abs(pitch)>TI ){
-                            TI = pitch;
+                        if( abs(roll)>TI ){
+                            TI = roll;
                         }
                     } else if( jarak>26 && jarak < 70 ){
-                        if( abs(pitch)>LI ){
-                            LI = pitch;
+                        if( abs(roll)>LI ){
+                            LI = roll;
                         }
                     } 
                     
                 } 
                 aLastState = aState; // Updates the previous state of the outputA with the current state
-            }
+
+
+
+
         }
         // reset interrupt flag and get INT_STATUS byte
         mpuInterrupt = false;
@@ -241,38 +240,36 @@ void loop() {
                 mpu.dmpGetGravity(&gravity, &q);
                 mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
 
-                if ( isReadingData==1 ){
-                    calibrateYawn = ypr[0] * 180/M_PI;
-                    calibratePitch = ypr[1] * 180/M_PI;
-                    calibrateRoll = ypr[0] * 180/M_PI;
-                }
+                // if ( isReadingData==1 ){
+                //     calibrateRoll = ypr[0] * 180/M_PI;
+                // }
 
             #endif
         }
-        //switch from calibration to measurement or stop reading from sensor
-        if(digitalRead(pushButt)==LOW){
-            if( isReadingData==1 ){
-                isReadingData ==2;
-                Serial.println("Calibration Finished");
-                Serial.print("Calibrated Yawn = ");
-                Serial.println(calibrateYawn);
-                Serial.print("Calibrated Pitch = ");
-                Serial.println(calibratePitch);
-                Serial.print("Calibrated Yawn = ");
-                Serial.println(calibrateRoll);
-                delay(300);
-            } else if ( isReadingData==2 ){
-                isReadingData=0;
-                Serial.println("Measurement Finished");
-                TC = 2.6*TI - 1.4*LI;
-                LC = 2.0*LI - 1.5*TI;
-                dataString = String(TC) + "," + String(LC);
-                copeAngle.println(dataString);
-                sensorData.close(); // close the file
-                copeAngle.close();
-                delay(300);
+
+            //switch from calibration to measurement or stop reading from sensor
+            if(digitalRead(pushButt)==LOW){
+                // if( isReadingData==1 ){
+                //     isReadingData ==2;
+                //     Serial.println("Calibration Finished");
+                //     Serial.print("Calibrated Yawn = ");
+                //     Serial.println(calibrateRoll);
+                //     delay(300);
+                // } else 
+                
+                if ( isReadingData==1 ){
+                    isReadingData=0;
+                    Serial.println("Measurement Finished");
+                    TC = 2.6*TI - 1.4*LI;
+                    LC = 2.0*LI - 1.5*TI;
+                    dataString = String(TC) + "," + String(LC);
+                    copeAngle.println(dataString);
+                    sensorData.close(); // close the file
+                    copeAngle.close();
+                    delay(300);
+                }
             }
-        }
+
     }
 
 }
