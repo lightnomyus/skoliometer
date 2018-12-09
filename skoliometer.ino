@@ -13,8 +13,8 @@ MPU6050 mpu;
 #define pushButt 3 // Push Button buat start dan finish measurement
 
 //Rotary Encoder
-#define outputA 6 //Dt
-#define outputB 7 //CLK
+#define outputA 4 //Dt
+#define outputB 5 //CLK
 float const d = 3.1;//satuan dlm cm
 float jarak;
 int counter = 0;
@@ -244,19 +244,4 @@ void loop() {
         }
     }
 
-}
-
-void saveData(){
-    if(SD.exists("data.csv")){ // check the card is still there
-        // now append new data file
-        sensorData = SD.open("data.csv", FILE_WRITE);
-        Serial.println("Writing Data");
-        if (sensorData){
-            sensorData.println(dataString);
-            sensorData.close(); // close the file
-            Serial.println("Data hass been printed");
-        }
-    } else{
-    Serial.println("Error writing to file !");
-    }
 }
