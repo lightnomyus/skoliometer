@@ -13,8 +13,8 @@ MPU6050 mpu;
 #define pushButt 3 // Push Button buat start dan finish measurement
 
 //Rotary Encoder
-#define outputA 6 //Dt
-#define outputB 7 //CLK
+#define outputA 4 //6 //Dt
+#define outputB 5 //7 //CLK
 float const d = 3.1;//satuan dlm cm
 float jarak;
 int counter = 0;
@@ -22,7 +22,6 @@ int putaran = 0;
 int aState;
 int aLastState; 
 int isReadingData = 0;
-int i = 0;
 
 //SD Card
 #include "SD.h"
@@ -31,6 +30,7 @@ const int CSpin = 10;
 String dataString =""; // holds the data to be written to the SD card
 
 File sensorData;
+File copeAngle;
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -42,19 +42,25 @@ uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 // orientation/motion vars
 Quaternion q;           // [w, x, y, z]         quaternion container
-VectorInt16 aa;         // [x, y, z]            accel sensor measurements
-VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
-VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
+//VectorInt16 aa;         // [x, y, z]            accel sensor measurements
+//VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
+//VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
-float euler[3];         // [psi, theta, phi]    Euler angle container
+//float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 float yawn, pitch, roll;
+float calibrateYawn, calibratePitch, calibrateRoll;
 
 //ISR detection here
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 void dmpDataReady() {
     mpuInterrupt = true;
 }
+
+//Cope Angle Measurement
+float TI=0;
+float LI=0;
+float TC,LC;
 
 void setup() {
     // join I2C bus (I2Cdev library doesn't do this automatically)
@@ -92,7 +98,6 @@ void setup() {
         // don't do anything more:
         return;
     }
-    Serial.println("card initialized.");
     
     // wait for ready
     Serial.println(F("\nPress Push Button to Start: "));
@@ -145,12 +150,18 @@ void setup() {
 
     //Open File for SD Card
     sensorData = SD.open("data.csv", FILE_WRITE);
+    copeAngle = SD.open("cope.csv", FILE_WRITE);
 }
 
 void loop() {
     // if programming failed, don't try to do anything
     if (!dmpReady) return;
 
+    //kalibrasi
+//    while( isReadingData==1 ){
+//      doCalibration();
+//    }
+    
     while( isReadingData ==1 ){
         // wait for MPU interrupt or extra packet(s) available
         while (!mpuInterrupt && fifoCount < packetSize) {
@@ -174,6 +185,9 @@ void loop() {
                Serial.print(jarak, 4);//4 digit belakang koma
                Serial.println(" cm");
 
+//               yawn = ypr[0] * 180/M_PI - calibrateYawn;
+//               pitch = ypr[1] * 180/M_PI - calibratePitch;
+//               roll = ypr[0] * 180/M_PI - calibrateRoll;
                yawn = ypr[0] * 180/M_PI;
                pitch = ypr[1] * 180/M_PI;
                roll = ypr[0] * 180/M_PI;
@@ -181,18 +195,26 @@ void loop() {
                 //write data
                 Serial.print("ypr\t");
                 Serial.print(yawn);
-                //Serial.print(ypr[0] * 180/M_PI);
                 Serial.print("\t");
                 Serial.print(pitch);
-                //Serial.print(ypr[1] * 180/M_PI);
                 Serial.print("\t");
                 Serial.println(roll);
-                //Serial.println(ypr[2] * 180/M_PI);
 
                 //write data to SD Card
                 dataString = String(jarak) + "," + String(yawn) + "," + String(pitch) + "," + String(roll); // convert to CSV
                 sensorData.println(dataString);
-                //saveData(); // save to SD card
+
+                //measure TI and LI
+                if( jarak >0 && jarak<25 ){
+                    if( abs(pitch)>TI ){
+                        TI = pitch;
+                    }
+                } else if( jarak>26 && jarak < 70 ){
+                    if( abs(pitch)>LI ){
+                        LI = pitch;
+                    }
+                } 
+                
              } 
              aLastState = aState; // Updates the previous state of the outputA with the current state
         }
@@ -227,36 +249,82 @@ void loop() {
                 mpu.dmpGetQuaternion(&q, fifoBuffer);
                 mpu.dmpGetGravity(&gravity, &q);
                 mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-//                Serial.print("ypr\t");
-//                Serial.print(ypr[0] * 180/M_PI);
-//                Serial.print("\t");
-//                Serial.print(ypr[1] * 180/M_PI);
-//                Serial.print("\t");
-//                Serial.println(ypr[2] * 180/M_PI);
             #endif
         }
         //stop reading from sensor
         if(digitalRead(pushButt)==LOW){
             isReadingData=0;
-            Serial.println("isReadingData = 0");
+            Serial.println("Measurement Finished");
+            TC = 2.6*TI - 1.4*LI;
+            LC = 2.0*LI - 1.5*TI;
+            dataString = String(TC) + "," + String(LC);
+            copeAngle.println(dataString);
             sensorData.close(); // close the file
+            copeAngle.close();
             delay(300);
         }
     }
 
 }
 
-void saveData(){
-    if(SD.exists("data.csv")){ // check the card is still there
-        // now append new data file
-        sensorData = SD.open("data.csv", FILE_WRITE);
-        Serial.println("Writing Data");
-        if (sensorData){
-            sensorData.println(dataString);
-            sensorData.close(); // close the file
-            Serial.println("Data hass been printed");
-        }
-    } else{
-    Serial.println("Error writing to file !");
+
+void doCalibration(){
+    while (!mpuInterrupt && fifoCount < packetSize) {
+      if (mpuInterrupt && fifoCount < packetSize) {
+        // try to get out of the infinite loop 
+        fifoCount = mpu.getFIFOCount();
+      }  
     }
+
+    // reset interrupt flag and get INT_STATUS byte
+    mpuInterrupt = false;
+    mpuIntStatus = mpu.getIntStatus();
+
+    // get current FIFO count
+    fifoCount = mpu.getFIFOCount();
+
+    // check for overflow (this should never happen unless our code is too inefficient)
+    if ((mpuIntStatus & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount >= 1024) {
+        // reset so we can continue cleanly
+        mpu.resetFIFO();
+        fifoCount = mpu.getFIFOCount();
+        Serial.println(F("FIFO overflow!"));
+
+    // otherwise, check for DMP data ready interrupt (this should happen frequently)
+    } else if (mpuIntStatus & _BV(MPU6050_INTERRUPT_DMP_INT_BIT)) {
+        // wait for correct available data length, should be a VERY short wait
+        while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
+
+        // read a packet from FIFO
+        mpu.getFIFOBytes(fifoBuffer, packetSize);
+        
+        // track FIFO count here in case there is > 1 packet available
+        // (this lets us immediately read more without waiting for an interrupt)
+        fifoCount -= packetSize;
+
+        #ifdef OUTPUT_READABLE_YAWPITCHROLL
+            // display Euler angles in degrees
+            mpu.dmpGetQuaternion(&q, fifoBuffer);
+            mpu.dmpGetGravity(&gravity, &q);
+            mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+
+            //calibration variable
+            calibrateYawn = ypr[0] * 180/M_PI;
+            calibratePitch = ypr[1] * 180/M_PI;
+            calibrateRoll = ypr[2] * 180/M_PI;
+        #endif
+    }
+    //stop calibration
+    if(digitalRead(pushButt)==LOW){
+        isReadingData ==2;
+        Serial.println("Calibration Finished");
+        Serial.print("Calibrated Yawn = ");
+        Serial.println(calibrateYawn);
+        Serial.print("Calibrated Pitch = ");
+        Serial.println(calibratePitch);
+        Serial.print("Calibrated Yawn = ");
+        Serial.println(calibrateRoll);
+        delay(300);
+    }
+    
 }
