@@ -15,7 +15,7 @@ MPU6050 mpu;
 //Rotary Encoder
 #define outputA 4 //6 //Dt
 #define outputB 5 //7 //CLK
-float const d = 3.1;//satuan dlm cm
+float const d = 3.7;//satuan dlm cm
 float jarak;
 int counter = 0;
 int putaran = 0; 
@@ -42,11 +42,7 @@ uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 // orientation/motion vars
 Quaternion q;           // [w, x, y, z]         quaternion container
-//VectorInt16 aa;         // [x, y, z]            accel sensor measurements
-//VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
-//VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
-//float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 float yawn, pitch, roll;
 float calibrateYawn, calibratePitch, calibrateRoll;
@@ -78,15 +74,15 @@ void setup() {
     Serial.println(F("Initializing I2C devices..."));
     mpu.initialize();
     
+    //pin declaration
     pinMode(INTERRUPT_PIN, INPUT);
     pinMode (outputA,INPUT);
     pinMode (outputB,INPUT);
+    pinMode(pushButt, INPUT_PULLUP);
    
     // verify connection
     Serial.println(F("Testing device connections..."));
     Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
-
-    pinMode(pushButt, INPUT_PULLUP);
 
     //begin SD Card
     Serial.print("Initializing SD card...");
@@ -156,13 +152,9 @@ void setup() {
 void loop() {
     // if programming failed, don't try to do anything
     if (!dmpReady) return;
-
-    //kalibrasi
-//    while( isReadingData==1 ){
-//      doCalibration();
-//    }
     
-    while( isReadingData ==1 ){
+    //isReadingData=1 when calibration, =2 when measurement
+    if( isReadingData ==1 || isReadingData==2 ){
         // wait for MPU interrupt or extra packet(s) available
         while (!mpuInterrupt && fifoCount < packetSize) {
             if (mpuInterrupt && fifoCount < packetSize) {
@@ -170,53 +162,52 @@ void loop() {
               fifoCount = mpu.getFIFOCount();
             }  
             
-            // rotary encoder is processed here
-             aState = digitalRead(outputA); // Reads the "current" state of the outputA
-             // If the previous and the current state of the outputA are different, that means a Pulse has occured
-             if (aState != aLastState){     
-               // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
-               if (digitalRead(outputB) != aState) { 
-                 counter ++;
-               } else {
-                 counter --;
-               }
-               jarak = counter*0.1*3.1416*d;
-               Serial.print("Jarak : ");
-               Serial.print(jarak, 4);//4 digit belakang koma
-               Serial.println(" cm");
-
-//               yawn = ypr[0] * 180/M_PI - calibrateYawn;
-//               pitch = ypr[1] * 180/M_PI - calibratePitch;
-//               roll = ypr[0] * 180/M_PI - calibrateRoll;
-               yawn = ypr[0] * 180/M_PI;
-               pitch = ypr[1] * 180/M_PI;
-               roll = ypr[0] * 180/M_PI;
-  
-                //write data
-                Serial.print("ypr\t");
-                Serial.print(yawn);
-                Serial.print("\t");
-                Serial.print(pitch);
-                Serial.print("\t");
-                Serial.println(roll);
-
-                //write data to SD Card
-                dataString = String(jarak) + "," + String(yawn) + "," + String(pitch) + "," + String(roll); // convert to CSV
-                sensorData.println(dataString);
-
-                //measure TI and LI
-                if( jarak >0 && jarak<25 ){
-                    if( abs(pitch)>TI ){
-                        TI = pitch;
+            if( isReadingData==2 ){
+                // when measuring, rotary encoder is processed here
+                aState = digitalRead(outputA); // Reads the "current" state of the outputA
+                // If the previous and the current state of the outputA are different, that means a Pulse has occured
+                if (aState != aLastState){     
+                    // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
+                    if (digitalRead(outputB) != aState) { 
+                        counter ++;
+                    } else {
+                        counter --;
                     }
-                } else if( jarak>26 && jarak < 70 ){
-                    if( abs(pitch)>LI ){
-                        LI = pitch;
-                    }
+                    jarak = counter*0.1*3.1416*d;
+                    Serial.print("Jarak : ");
+                    Serial.print(jarak, 4);//4 digit belakang koma
+                    Serial.println(" cm");
+
+                    yawn = ypr[0] * 180/M_PI - calibrateYawn;
+                    pitch = ypr[1] * 180/M_PI - calibratePitch;
+                    roll = ypr[0] * 180/M_PI - calibrateRoll;
+        
+                    //write data
+                    Serial.print("ypr\t");
+                    Serial.print(yawn);
+                    Serial.print("\t");
+                    Serial.print(pitch);
+                    Serial.print("\t");
+                    Serial.println(roll);
+
+                    //write data to SD Card
+                    dataString = String(jarak) + "," + String(yawn) + "," + String(pitch) + "," + String(roll); // convert to CSV
+                    sensorData.println(dataString);
+
+                    //measure TI and LI
+                    if( jarak >0 && jarak<25 ){
+                        if( abs(pitch)>TI ){
+                            TI = pitch;
+                        }
+                    } else if( jarak>26 && jarak < 70 ){
+                        if( abs(pitch)>LI ){
+                            LI = pitch;
+                        }
+                    } 
+                    
                 } 
-                
-             } 
-             aLastState = aState; // Updates the previous state of the outputA with the current state
+                aLastState = aState; // Updates the previous state of the outputA with the current state
+            }
         }
         // reset interrupt flag and get INT_STATUS byte
         mpuInterrupt = false;
@@ -249,82 +240,39 @@ void loop() {
                 mpu.dmpGetQuaternion(&q, fifoBuffer);
                 mpu.dmpGetGravity(&gravity, &q);
                 mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+
+                if ( isReadingData==1 ){
+                    calibrateYawn = ypr[0] * 180/M_PI;
+                    calibratePitch = ypr[1] * 180/M_PI;
+                    calibrateRoll = ypr[0] * 180/M_PI;
+                }
+
             #endif
         }
-        //stop reading from sensor
+        //switch from calibration to measurement or stop reading from sensor
         if(digitalRead(pushButt)==LOW){
-            isReadingData=0;
-            Serial.println("Measurement Finished");
-            TC = 2.6*TI - 1.4*LI;
-            LC = 2.0*LI - 1.5*TI;
-            dataString = String(TC) + "," + String(LC);
-            copeAngle.println(dataString);
-            sensorData.close(); // close the file
-            copeAngle.close();
-            delay(300);
+            if( isReadingData==1 ){
+                isReadingData ==2;
+                Serial.println("Calibration Finished");
+                Serial.print("Calibrated Yawn = ");
+                Serial.println(calibrateYawn);
+                Serial.print("Calibrated Pitch = ");
+                Serial.println(calibratePitch);
+                Serial.print("Calibrated Yawn = ");
+                Serial.println(calibrateRoll);
+                delay(300);
+            } else if ( isReadingData==2 ){
+                isReadingData=0;
+                Serial.println("Measurement Finished");
+                TC = 2.6*TI - 1.4*LI;
+                LC = 2.0*LI - 1.5*TI;
+                dataString = String(TC) + "," + String(LC);
+                copeAngle.println(dataString);
+                sensorData.close(); // close the file
+                copeAngle.close();
+                delay(300);
+            }
         }
     }
 
-}
-
-
-void doCalibration(){
-    while (!mpuInterrupt && fifoCount < packetSize) {
-      if (mpuInterrupt && fifoCount < packetSize) {
-        // try to get out of the infinite loop 
-        fifoCount = mpu.getFIFOCount();
-      }  
-    }
-
-    // reset interrupt flag and get INT_STATUS byte
-    mpuInterrupt = false;
-    mpuIntStatus = mpu.getIntStatus();
-
-    // get current FIFO count
-    fifoCount = mpu.getFIFOCount();
-
-    // check for overflow (this should never happen unless our code is too inefficient)
-    if ((mpuIntStatus & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount >= 1024) {
-        // reset so we can continue cleanly
-        mpu.resetFIFO();
-        fifoCount = mpu.getFIFOCount();
-        Serial.println(F("FIFO overflow!"));
-
-    // otherwise, check for DMP data ready interrupt (this should happen frequently)
-    } else if (mpuIntStatus & _BV(MPU6050_INTERRUPT_DMP_INT_BIT)) {
-        // wait for correct available data length, should be a VERY short wait
-        while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
-
-        // read a packet from FIFO
-        mpu.getFIFOBytes(fifoBuffer, packetSize);
-        
-        // track FIFO count here in case there is > 1 packet available
-        // (this lets us immediately read more without waiting for an interrupt)
-        fifoCount -= packetSize;
-
-        #ifdef OUTPUT_READABLE_YAWPITCHROLL
-            // display Euler angles in degrees
-            mpu.dmpGetQuaternion(&q, fifoBuffer);
-            mpu.dmpGetGravity(&gravity, &q);
-            mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-
-            //calibration variable
-            calibrateYawn = ypr[0] * 180/M_PI;
-            calibratePitch = ypr[1] * 180/M_PI;
-            calibrateRoll = ypr[2] * 180/M_PI;
-        #endif
-    }
-    //stop calibration
-    if(digitalRead(pushButt)==LOW){
-        isReadingData ==2;
-        Serial.println("Calibration Finished");
-        Serial.print("Calibrated Yawn = ");
-        Serial.println(calibrateYawn);
-        Serial.print("Calibrated Pitch = ");
-        Serial.println(calibratePitch);
-        Serial.print("Calibrated Yawn = ");
-        Serial.println(calibrateRoll);
-        delay(300);
-    }
-    
 }
