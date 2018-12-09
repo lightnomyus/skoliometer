@@ -15,7 +15,7 @@ MPU6050 mpu;
 //Rotary Encoder
 #define outputA 4 //Dt
 #define outputB 5 //CLK
-float const d = 3.1;//satuan dlm cm
+float const d = 3.7;//satuan dlm cm
 float jarak;
 int counter = 0;
 int putaran = 0; 
@@ -48,7 +48,8 @@ VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measure
 VectorFloat gravity;    // [x, y, z]            gravity vector
 float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
-float yawn, pitch, roll;
+//float yawn, pitch; 
+float roll;
 
 //ISR detection here
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
@@ -174,23 +175,24 @@ void loop() {
                Serial.print(jarak, 4);//4 digit belakang koma
                Serial.println(" cm");
 
-               yawn = ypr[0] * 180/M_PI;
-               pitch = ypr[1] * 180/M_PI;
-               roll = ypr[0] * 180/M_PI;
+               //yawn = ypr[0] * 180/M_PI;
+               //pitch = ypr[1] * 180/M_PI;
+               roll = ypr[2] * 180/M_PI - 10.6;
   
                 //write data
-                Serial.print("ypr\t");
-                Serial.print(yawn);
+                Serial.print("roll\t");
+                //Serial.print(yawn);
                 //Serial.print(ypr[0] * 180/M_PI);
                 Serial.print("\t");
-                Serial.print(pitch);
+                //Serial.print(pitch);
                 //Serial.print(ypr[1] * 180/M_PI);
-                Serial.print("\t");
+                //Serial.print("\t");
                 Serial.println(roll);
                 //Serial.println(ypr[2] * 180/M_PI);
 
                 //write data to SD Card
-                dataString = String(jarak) + "," + String(yawn) + "," + String(pitch) + "," + String(roll); // convert to CSV
+                //dataString = String(jarak) + "," + String(yawn) + "," + String(pitch) + "," + String(roll); // convert to CSV
+                dataString = String(jarak) + "," + String(roll);
                 sensorData.println(dataString);
                 //saveData(); // save to SD card
              } 
