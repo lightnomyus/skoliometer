@@ -187,45 +187,6 @@ void loop() {
 
             //if( isReadingData==2 ){
                 // when measuring, rotary encoder is processed here
-                aState = digitalRead(outputA); // Reads the "current" state of the outputA
-                // If the previous and the current state of the outputA are different, that means a Pulse has occured
-                if (aState != aLastState){     
-                    // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
-                    if (digitalRead(outputB) != aState) { 
-                        counter ++;
-                    } else {
-                        counter --;
-                    }
-                    jarak = counter*0.1*3.1416*d;
-                    Serial.print("Jarak : ");
-                    Serial.print(jarak, 4);//4 digit belakang koma
-                    Serial.println(" cm");
-
-                    //roll = ypr[2] * 180/M_PI;
-                    roll = ypr[2] * 180/M_PI - calibrateRoll;
-        
-                    //write data
-                    Serial.print("ypr\t");
-                    Serial.println(roll);
-
-                    //write data to SD Card
-                    dataString = String(jarak) + "," + String(roll); // convert to CSV
-                    sensorData.println(dataString);
-                    Serial.println("Data printed");
-
-                    //measure TI and LI
-                    if( jarak >0 && jarak<25 ){
-                        if( abs(roll)>TI ){
-                            TI = roll;
-                        }
-                    } else if( jarak>26 && jarak < 70 ){
-                        if( abs(roll)>LI ){
-                            LI = roll;
-                        }
-                    } 
-                    
-                } 
-                aLastState = aState; // Updates the previous state of the outputA with the current state
             //}
 
 
@@ -266,6 +227,13 @@ void loop() {
                 mpu.dmpGetGravity(&gravity, &q);
                 mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
 
+                //variable roll
+                //roll = ypr[2] * 180/M_PI;
+                roll = ypr[2] * 180/M_PI - calibrateRoll;
+                if(roll>=45.00){
+                  roll = roll-45.00;
+                }
+
                 if ( isCalibrated==0 ){
                     calibrateRoll = ypr[2] * 180/M_PI;
                     if( abs(calibrateRoll)<=7.00 ){
@@ -282,7 +250,42 @@ void loop() {
             #endif
         }
 
+                aState = digitalRead(outputA); // Reads the "current" state of the outputA
+                // If the previous and the current state of the outputA are different, that means a Pulse has occured
+                if (aState != aLastState){     
+                    // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
+                    if (digitalRead(outputB) != aState) { 
+                        counter ++;
+                    } else {
+                        counter --;
+                    }
+                    jarak = counter*0.1*3.1416*d;
+                    Serial.print("Jarak : ");
+                    Serial.print(jarak, 4);//4 digit belakang koma
+                    Serial.println(" cm");
+        
+                    //write data
+                    Serial.print("ypr\t");
+                    Serial.println(roll);
 
+                    //write data to SD Card
+                    dataString = String(jarak) + "," + String(roll); // convert to CSV
+                    sensorData.println(dataString);
+                    Serial.println("Data printed");
+
+                    //measure TI and LI
+                    if( jarak >0.00 && jarak<25.00 ){
+                        if( abs(roll)>TI ){
+                            TI = roll;
+                        }
+                    } else if( jarak>26.00 && jarak < 70.00 ){
+                        if( abs(roll)>LI ){
+                            LI = roll;
+                        }
+                    } 
+                    
+                } 
+                aLastState = aState; // Updates the previous state of the outputA with the current state
 
     }
 
